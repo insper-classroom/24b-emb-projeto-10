@@ -1,47 +1,59 @@
-/*
- * LED blink with FreeRTOS
- */
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
-#include <queue.h>
-
-#include "pico/stdlib.h"
 #include <stdio.h>
+#include "pico/stdlib.h"
 
-struct led_task_arg {
-    int gpio;
-    int delay;
-};
+const int ECHO_PIN = 6;
+const int TRIG_PIN = 7;
 
-void led_task(void *p) {
-    struct led_task_arg *a = (struct led_task_arg *)p;
+volatile bool echo_got = false;
+volatile uint32_t start_us = 0;
+volatile uint32_t end_us = 0;
 
-    gpio_init(a->gpio);
-    gpio_set_dir(a->gpio, GPIO_OUT);
-    while (true) {
-        gpio_put(a->gpio, 1);
-        vTaskDelay(pdMS_TO_TICKS(a->delay));
-        gpio_put(a->gpio, 0);
-        vTaskDelay(pdMS_TO_TICKS(a->delay));
+void gpio_callback(uint gpio, uint32_t events) {
+    if (gpio == ECHO_PIN) {
+        if (gpio_get(ECHO_PIN)) {
+            start_us = time_us_32();
+            echo_got = false;
+        } else {
+            end_us = time_us_32();
+            echo_got = true;
+        }
     }
+}
+
+void send_trig_pulse() {
+    gpio_put(TRIG_PIN, 1);
+    sleep_us(10);
+    gpio_put(TRIG_PIN, 0);
 }
 
 int main() {
     stdio_init_all();
-    printf("Start LED blink\n");
 
-    struct led_task_arg arg1 = {20, 100};
-    xTaskCreate(led_task, "LED_Task 1", 256, &arg1, 1, NULL);
+    gpio_init(ECHO_PIN);
+    gpio_set_dir(ECHO_PIN, GPIO_IN);
+    gpio_set_irq_enabled_with_callback(ECHO_PIN,
+        GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
+        true, gpio_callback);
 
-    struct led_task_arg arg2 = {21, 200};
-    xTaskCreate(led_task, "LED_Task 2", 256, &arg2, 1, NULL);
+    gpio_init(TRIG_PIN);
+    gpio_set_dir(TRIG_PIN, GPIO_OUT);
+    gpio_put(TRIG_PIN, 0);
 
-    struct led_task_arg arg3 = {22, 300};
-    xTaskCreate(led_task, "LED_Task 3", 256, &arg3, 1, NULL);
+    sleep_ms(1000);  // aguarda inicialização do sensor
 
-    vTaskStartScheduler();
+    while (true) {
+        send_trig_pulse();
+        sleep_ms(100); // tempo para leitura do echo
 
-    while (true)
-        ;
+        if (echo_got && end_us > start_us) {
+            uint32_t delta_t = end_us - start_us;
+            float distancia_cm = (float)delta_t * 0.017015f;  // fator para cm
+            printf("Distância: %.2f cm\n", distancia_cm);
+            echo_got = false;
+        }
+
+        sleep_ms(200);  // intervalo entre medições
+    }
+
+    return 0;
 }
