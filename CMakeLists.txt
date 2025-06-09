@@ -41,6 +41,10 @@ target_link_libraries(pico-freertos PRIVATE
     pico_stdlib
     FreeRTOS-Kernel
     FreeRTOS-Kernel-Heap4
+    hardware_pwm
+    hardware_gpio
+    hardware_irq
+    hardware_timer
 )
 
 target_compile_options(pico-freertos PRIVATE -Wall)
