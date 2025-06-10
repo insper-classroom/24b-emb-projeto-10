@@ -1,11 +1,22 @@
 #include <stdio.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "hardware/pwm.h"
+#include "hardware/adc.h"
+#include "hardware/irq.h"
 
-// === Pinos ===
 #define SERVO_PIN 15
 #define ECHO_PIN 6
 #define TRIG_PIN 7
+#define AUDIO_IN_PIN 27
+#define AUDIO_OUT_PIN 28
+
+#define SAMPLE_RATE 8000
+#define RECORD_TIME_SECONDS 3
+#define AUDIO_SAMPLES (SAMPLE_RATE * RECORD_TIME_SECONDS)
+
+char audio[AUDIO_SAMPLES];
+int wav_position = 0;
 
 // === Ultrassônico globals ===
 volatile bool echo_got = false;
@@ -60,11 +71,41 @@ float medir_distancia_cm() {
     return -1.0f;
 }
 
+// === Gravação e Reprodução ===
+void adc_record_audio() {
+    adc_select_input(AUDIO_IN_PIN - 26);
+    for (int i = 0; i < AUDIO_SAMPLES; i++) {
+        uint16_t sample = adc_read();
+        audio[i] = sample >> 4; // Escala para 8 bits
+        sleep_us(1000000 / SAMPLE_RATE);
+    }
+}
+
+void pwm_play_audio() {
+    gpio_set_function(AUDIO_OUT_PIN, GPIO_FUNC_PWM);
+    uint slice = pwm_gpio_to_slice_num(AUDIO_OUT_PIN);
+
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_wrap(&config, 255); // 8-bit sample
+    pwm_config_set_clkdiv(&config, 1.0f);
+    pwm_init(slice, &config, true);
+    pwm_set_enabled(slice, true);
+
+    for (int i = 0; i < AUDIO_SAMPLES; i++) {
+        pwm_set_gpio_level(AUDIO_OUT_PIN, audio[i]);
+        sleep_us(1000000 / SAMPLE_RATE);
+    }
+
+    pwm_set_enabled(slice, false);
+}
+
 // === MAIN ===
 int main() {
     stdio_init_all();
+    adc_init();
+    adc_gpio_init(AUDIO_IN_PIN);
 
-    // Setup sensor
+    // Setup ultrassônico
     gpio_init(ECHO_PIN);
     gpio_set_dir(ECHO_PIN, GPIO_IN);
     gpio_set_irq_enabled_with_callback(ECHO_PIN,
@@ -78,7 +119,8 @@ int main() {
     sleep_ms(1000);
 
     int ang = 0;
-    int dir = 1; // direção: 1 para frente, -1 para trás
+    int dir = 1;
+    bool ja_gravou = false;
 
     while (true) {
         float dist = medir_distancia_cm();
@@ -88,16 +130,24 @@ int main() {
 
         if (dist > 0 && dist < 10.0f) {
             bloqueado = true;
-        } else if (dist >= 10.0f) {
+        } else {
             bloqueado = false;
+            ja_gravou = false;
         }
 
         if (!bloqueado) {
             set_servo_angle(SERVO_PIN, ang);
             ang += 5 * dir;
-
             if (ang >= 180) dir = -1;
             else if (ang <= 0) dir = 1;
+        }
+
+        if (bloqueado && !ja_gravou) {
+            printf("Objeto detectado! Gravando...\n");
+            adc_record_audio();
+            printf("Reproduzindo...\n");
+            pwm_play_audio();
+            ja_gravou = true;
         }
 
         sleep_ms(20);

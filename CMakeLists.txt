@@ -14,42 +14,19 @@ endif()
 # ====================================================================================
 set(PICO_BOARD pico CACHE STRING "Board type")
 
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.12)
 
-# Pull in SDK (must be before project)
+# initialize the SDK based on PICO_SDK_PATH
+# note: this must happen before project()
 include(pico_sdk_import.cmake)
 
-# Pull in FreeRTOS
-set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/freertos/FreeRTOS-Kernel)
-include(freertos/FreeRTOS_Kernel_import.cmake)
+project(pico_emb)
 
-# Project name
-project(pico-freertos)
-
+# initialize the Pico SDK
 pico_sdk_init()
 
-# Configuration projects
-add_executable(pico-freertos
-    main/main.c
-)
+# rest of your project
 
-target_include_directories(pico-freertos PRIVATE
-    freertos/
-)
+add_subdirectory(freertos)
+add_subdirectory(main)
 
-target_link_libraries(pico-freertos PRIVATE
-    pico_stdlib
-    FreeRTOS-Kernel
-    FreeRTOS-Kernel-Heap4
-    hardware_pwm
-    hardware_gpio
-    hardware_irq
-    hardware_timer
-)
-
-target_compile_options(pico-freertos PRIVATE -Wall)
-
-# Run the entire project in SRAM
-# pico_set_binary_type(pico-freertos copy_to_ram)
-
-pico_add_extra_outputs(pico-freertos)
