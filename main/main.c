@@ -25,6 +25,9 @@ typedef struct {
     bool bloqueado;
 } SystemState;
 
+// Variável global para armazenar o ponteiro para o estado
+static SystemState *global_state;
+
 // === PWM Servo Setup ===
 void setup_servo_pwm(uint pin) {
     gpio_set_function(pin, GPIO_FUNC_PWM);
@@ -43,14 +46,14 @@ void set_servo_angle(uint pin, float angle_deg) {
 }
 
 // === Ultrassônico ===
-void gpio_callback(uint gpio, uint32_t events, SystemState *state) {
+void gpio_callback(uint gpio, uint32_t events) {
     if (gpio == ECHO_PIN) {
         if (gpio_get(ECHO_PIN)) {
-            state->start_us = time_us_32();
-            state->echo_got = false;
+            global_state->start_us = time_us_32();
+            global_state->echo_got = false;
         } else {
-            state->end_us = time_us_32();
-            state->echo_got = true;
+            global_state->end_us = time_us_32();
+            global_state->echo_got = true;
         }
     }
 }
@@ -115,8 +118,10 @@ int main() {
     gpio_init(ECHO_PIN);
     gpio_set_dir(ECHO_PIN, GPIO_IN);
     SystemState state = {0}; // Inicializa a estrutura
+    global_state = &state; // Atribui o ponteiro para o estado global
     gpio_set_irq_enabled_with_callback(ECHO_PIN,
-        GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, (gpio_irq_callback_t)gpio_callback, &state);
+        GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, gpio_callback);
+
     gpio_init(TRIG_PIN);
     gpio_set_dir(TRIG_PIN, GPIO_OUT);
     gpio_put(TRIG_PIN, 0);
