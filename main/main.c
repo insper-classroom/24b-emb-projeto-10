@@ -25,7 +25,6 @@ typedef struct {
     bool bloqueado;
 } SystemState;
 
-// Variável global para armazenar o ponteiro para o estado
 static SystemState *global_state;
 
 // === PWM Servo Setup ===
