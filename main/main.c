@@ -40,7 +40,10 @@ static QueueHandle_t qAudio;
 // ISR do ultrassom
 // ----------------------------------------------------------------------------
 static void gpio_callback(uint gpio, uint32_t events) {
+    // variáveis persistentes, supressão de aviso de escopo
+    // cppcheck-suppress variableScope
     static uint32_t start_us;
+    // cppcheck-suppress variableScope
     static bool pulse_on = false;
 
     if (gpio == ECHO_PIN) {
@@ -48,6 +51,17 @@ static void gpio_callback(uint gpio, uint32_t events) {
             start_us = time_us_32();
             pulse_on = true;
         }
+        else if ((events & GPIO_IRQ_EDGE_FALL) && pulse_on) {
+            uint32_t delta = time_us_32() - start_us;
+            pulse_on = false;
+
+            UltrassomMsg_t msg = { .distancia_cm = delta * 0.017015f };
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xQueueSendFromISR(qUltrassom, &msg, &xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+}
         else if ((events & GPIO_IRQ_EDGE_FALL) && pulse_on) {
             uint32_t delta = time_us_32() - start_us;
             pulse_on = false;
