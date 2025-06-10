@@ -10,6 +10,7 @@
 #define TRIG_PIN 7
 #define AUDIO_IN_PIN 27
 #define AUDIO_OUT_PIN 28
+#define LED_BLOCK_PIN 14  // LED acende quando em bloqueio
 
 #define SAMPLE_RATE 8000
 #define RECORD_TIME_SECONDS 3
@@ -105,6 +106,11 @@ int main() {
     adc_init();
     adc_gpio_init(AUDIO_IN_PIN);
 
+    // LED de bloqueio
+    gpio_init(LED_BLOCK_PIN);
+    gpio_set_dir(LED_BLOCK_PIN, GPIO_OUT);
+    gpio_put(LED_BLOCK_PIN, 0);
+
     // Setup ultrassônico
     gpio_init(ECHO_PIN);
     gpio_set_dir(ECHO_PIN, GPIO_IN);
@@ -130,8 +136,10 @@ int main() {
 
         if (dist > 0 && dist < 10.0f) {
             bloqueado = true;
+            gpio_put(LED_BLOCK_PIN, 1);
         } else {
             bloqueado = false;
+            gpio_put(LED_BLOCK_PIN, 0);
             ja_gravou = false;
         }
 
